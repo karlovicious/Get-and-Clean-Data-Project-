@@ -1,0 +1,78 @@
+## Getting and Cleaning Data Project
+This is the submission Read Me for the Getting and Cleaning Data course project. This is the markdown version of the comments found in the run_analysis.R script.
+  
+The script accomplishes 5 things:
+1) Merges the training and the test sets to create one data set.
+2) Extracts only the measurements on the mean and standard deviation for each measurement. 
+3) Uses descriptive activity names to name the activities in the data set
+4) Appropriately labels the data set with descriptive variable names. 
+5) From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject.
+  
+Only one required library. The script will fetch and unzip the data to a 'data' subfolder in your working directory.
+``` {r fetchandunzip}
+library(RCurl)
+
+if (!file.exists("./data")) {dir.create("./data")}
+  fileURL <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
+  download.file(fileURL, destfile="./data/UCI-HAR-dataset.zip", method = "curl")
+  unzip("./data/UCI-HAR-dataset.zip", exdir = "./data")
+```
+  
+Next we need to combine the training and test sets. They are unintuitively marked by default. Observations are Xs, labels are Ys, and subjects are factor coded only.
+  
+First, combine observations:
+``` {r combineobs}
+obs.train <- read.table("./data/UCI HAR Dataset/train/X_train.txt")
+obs.test <- read.table("./data/UCI HAR Dataset/test/X_test.txt")
+obs.data <- rbind(obs.train, obs.test)
+```
+Then, labels:
+``` {r combinelabels}
+label.train <- read.table("./data/UCI HAR Dataset/train/y_train.txt")
+label.test <- read.table("./data/UCI HAR Dataset/test/y_test.txt")
+label.data <- rbind(label.train, label.test)
+```
+Finally, subjects:
+``` {r combinesubjects}
+subj.train <- read.table("./data/UCI HAR Dataset/train/subject_train.txt")
+subj.test <- read.table("./data/UCI HAR Dataset/test/subject_test.txt")
+subj <- rbind(subj.train,subj.test)
+```
+Per the assignment instructions, we want only the standard deviation and mean for each measurement:
+``` {r meanandsd}
+desired.features <- read.table("./data/UCI HAR Dataset/features.txt")
+mean.sd.features <- grep("-mean\\(\\)|-std\\(\\)", desired.features[,2])
+x.mean.sd <- obs.data[, mean.sd.features]
+```
+We ought to rename the measurement names something useful and readable, extract the names from the features codebook:
+``` {r nameextraction}
+names(x.mean.sd) <- desired.features[mean.sd.features, 2]
+names(x.mean.sd) <- tolower(names(x.mean.sd))
+names(x.mean.sd) <- gsub("\\(|\\)", "", names(x.mean.sd))
+```
+Repeat a similar process for the activity names:
+``` {r activityextraction}
+activities <- read.table("./data/UCI HAR Dataset/activity_labels.txt")
+activities[,2] <- tolower(as.character(activities[,2]))
+activities[,2] <- gsub("_", "", activities[,2])
+```
+Now we rename the original labels per activity names and subjects.
+``` {r renamelabels}
+label.data[, 1] <- activities[label.data[,1], 2]
+colnames(label.data) <- "activity"
+colnames(subj) <- "subject"
+```
+Nearly done, reconstruct the merged set with the proper names.
+``` {r mergeset}
+data <- cbind(subj, x.mean.sd, label.data)
+write.table(data, "./data/UCI HAR Dataset/merged_data.txt", row.names = FALSE)
+str(data)
+```
+Finally, write out the smaller tidy set that contains the average measurement for each activity and each subject.
+``` {r tidysetout}
+average.set <- aggregate(x=data, by=list(activities=data$activity, subj=data$subject), FUN=mean)
+average.set <- average.set[, !(colnames(average.set) %in% c("subj", "activity"))]
+write.table(average.set, "./data/UCI HAR Dataset/average.txt", row.names = FALSE)
+str(average.set)
+```
+
